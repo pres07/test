@@ -1,1 +1,54 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Survey Portal</title>
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #e2e8f0;
+    }
+    .container {
+      text-align: center;
+      padding: 40px;
+    }
+    h1 { margin: 0 0 12px; font-size: 28px; }
+    p { color: #94a3b8; margin: 0 0 32px; }
+    .buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    a {
+      padding: 14px 28px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    a:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+    .researcher {
+      background: linear-gradient(90deg, #0ea5e9, #22d3ee);
+      color: #0c4a6e;
+    }
+    .admin {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Survey Portal</h1>
+    <p>Choose your portal to continue</p>
+    <div class="buttons">
+      <a href="Researcher.html" class="researcher">Researcher Portal</a>
+      <a href="Admin.html" class="admin">Admin Portal</a>
+    </div>
+  </div>
+</body>
+</html>

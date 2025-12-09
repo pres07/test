@@ -10,9 +10,9 @@
   <div class="wrap">
     <div class="topbar">
       <h1>Admin • Survey Approvals</h1>
-      <a class="btn" href="Researcher.html">↩︎ Open Researcher Portal</a>
+      <a class="btn" href="Researcher.html">↩︎ Researcher Portal</a>
     </div>
- 
+
     <div class="grid">
       <!-- LEFT SIDE: Surveys list -->
       <div class="card">
@@ -22,7 +22,7 @@
           <button class="btn small" data-filter="rejected">Rejected <span class="count" id="c-rejected">0</span></button>
           <button class="btn small ghost" id="refreshBtn">↻ Refresh</button>
         </div>
- 
+
         <table>
           <thead>
             <tr>
@@ -38,7 +38,7 @@
           </tbody>
         </table>
       </div>
- 
+
       <!-- RIGHT SIDE: Preview -->
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -46,15 +46,15 @@
           <button id="openNew" class="btn small">Open in new tab</button>
         </div>
         <iframe id="frame" title="Survey preview"
-          sandbox="allow-forms allow-scripts allow-popups allow-top-navigation-by-user-activation"></iframe>
+          sandbox="allow-forms allow-scripts allow-popups allow-same-origin allow-top-navigation-by-user-activation"></iframe>
         <div id="pvStatus" class="status warn" style="margin-top:8px;">Select a survey to preview.</div>
         <div class="muted" style="margin-top:6px;">
           Note: Some providers block iframing via <code>X-Frame-Options</code> / <code>Content-Security-Policy</code>.
-          If the frame stays blank, use “Open in new tab”.
+          If the frame stays blank, use "Open in new tab".
         </div>
       </div>
     </div>
- 
+
     <!-- ADMIN ENTRY LOG -->
     <div class="card" style="margin-top:20px;">
       <h2 style="margin-top:0;">Admin Entry Log</h2>
@@ -73,7 +73,7 @@
       </table>
     </div>
   </div>
- 
+
   <script>
     const $ = s => document.querySelector(s);
     const tbody = $('#tbody');
@@ -82,7 +82,7 @@
     let filter = 'pending';
     let surveys = [];
     let adminLog = JSON.parse(localStorage.getItem('adminLog') || '[]');
- 
+
     function loadSurveys() {
       try { surveys = JSON.parse(localStorage.getItem('surveys') || '[]'); }
       catch { surveys = []; }
@@ -90,13 +90,13 @@
       surveys.forEach(s => { if (!s.status) { s.status = 'pending'; changed = true; } });
       if (changed) localStorage.setItem('surveys', JSON.stringify(surveys));
     }
- 
+
     function fmtDate(ts){
       if(!ts) return '-';
       const d = new Date(ts);
       return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     }
- 
+
     function detectProvider(u=''){
       const h = (u||'').toLowerCase();
       if (h.includes('forms.office.com')) return 'microsoftform';
@@ -106,7 +106,7 @@
       if (h.includes('typeform.com')) return 'typeform';
       return 'other';
     }
- 
+
     function renderCounts(){
       const counts = {pending:0, approved:0, rejected:0};
       surveys.forEach(s => counts[s.status] = (counts[s.status]||0)+1);
@@ -114,7 +114,7 @@
       $('#c-approved').textContent = counts.approved||0;
       $('#c-rejected').textContent = counts.rejected||0;
     }
- 
+
     function renderList(){
       tbody.innerHTML = '';
       const list = surveys.filter(s => s.status === filter);
@@ -139,7 +139,7 @@
         tbody.appendChild(tr);
       });
     }
- 
+
     function renderLog() {
       logBody.innerHTML = '';
       if (adminLog.length === 0) {
@@ -156,7 +156,7 @@
         logBody.appendChild(tr);
       });
     }
- 
+
     function addToLog(action, survey) {
       adminLog.unshift({
         action,
@@ -167,21 +167,21 @@
       localStorage.setItem('adminLog', JSON.stringify(adminLog));
       renderLog();
     }
- 
+
     function statusColor(st){
       if (st==='approved') return '#22c55e';
       if (st==='rejected') return '#ef4444';
       return '#f59e0b';
     }
- 
+
     function findById(id){ return surveys.find(s => s.studyId === id); }
- 
+
     function saveAll(){
       localStorage.setItem('surveys', JSON.stringify(surveys));
       renderCounts();
       renderList();
     }
- 
+
     function setPreview(s){
       if (!s){
         $('#pvTitle').textContent='Preview';
@@ -197,23 +197,23 @@
       frame.src = s.url;
       $('#openNew').onclick = () => window.open(s.url, '_blank', 'noopener');
     }
- 
+
     function escapeHtml(str=''){
       return String(str).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     }
- 
+
     // Buttons and Events
     document.querySelectorAll('[data-filter]').forEach(btn=>{
       btn.addEventListener('click', ()=>{ filter = btn.dataset.filter; renderList(); });
     });
- 
+
     $('#refreshBtn').addEventListener('click', ()=>{ loadSurveys(); renderCounts(); renderList(); renderLog(); });
- 
+
     tbody.addEventListener('click', e=>{
       const b = e.target.closest('button'); if(!b) return;
       const act = b.dataset.act, id = b.dataset.id;
       const s = findById(id); if(!s) return;
- 
+
       if (act === 'preview') setPreview(s);
       if (act === 'approve') { s.status='approved'; s.approvedAt=Date.now(); s.approvedBy='admin_demo'; saveAll(); addToLog('Approved', s); }
       if (act === 'reject')  { s.status='rejected'; s.rejectedAt=Date.now(); s.rejectedBy='admin_demo'; saveAll(); addToLog('Rejected', s); }
@@ -224,7 +224,7 @@
         }
       }
     });
- 
+
     // Initialize
     loadSurveys();
     renderCounts();

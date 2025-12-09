@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Survey Embedder • Researcher Portal</title>
+  <link rel="stylesheet" href="researcher.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>Survey Embedder</h1>
+ 
+    <div class="grid">
+      <!-- Left: form & saved list -->
+      <div class="card">
+        <h2 style="margin:0 0 8px;font-size:16px;">Add / Edit Survey</h2>
+        <form id="form">
+          <label for="title">Survey Title</label>
+          <input id="title" type="text" placeholder="e.g., Digital Habits – Week 3" required />
+ 
+          <label for="url">Survey URL</label>
+          <input id="url" type="url" inputmode="url" placeholder="https://…" required />
+          <div class="hint">
+            Supports Microsoft Forms, Google Forms, Qualtrics, SurveyMonkey, Typeform, etc. We'll try to add embed params automatically.
+          </div>
+ 
+          <div class="row">
+            <div>
+              <label for="provider">Provider (optional)</label>
+              <select id="provider">
+                <option value="">Auto-detect</option>
+                <option value="microsoftform">Microsoft Forms</option>
+                <option value="googleforms">Google Forms</option>
+                <option value="qualtrics">Qualtrics</option>
+                <option value="surveymonkey">SurveyMonkey</option>
+                <option value="typeform">Typeform</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label for="Description">Description</label>
+              <input id="Description" type="text" placeholder="Add Description" />
+            </div>
+          </div>
+ 
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;margin:10px 0;">
+              <input id="appendParams" type="checkbox" checked />
+              Append tracking params (Description)
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;margin:10px 0;">
+              <input id="tryEmbed" type="checkbox" checked />
+              Try to embed in iframe (fallback: new tab)
+            </label>
+          </div>
+ 
+          <div class="row">
+            <button type="submit" class="btn primary">Save Survey</button>
+            <button type="button" id="resetBtn" class="btn ghost">Clear</button>
+          </div>
+          <div id="formMsg" class="status" aria-live="polite"></div>
+          <input id="editIndex" type="hidden" />
+        </form>
+ 
+        <hr style="border:none;border-top:1px solid #1f2937;margin:16px 0" />
+ 
+        <div class="flex" style="justify-content:space-between;">
+          <h2 style="margin:0 0 8px;font-size:16px;">Saved Surveys</h2>
+          <button id="exportBtn" class="btn ghost" title="Copy list as JSON">Copy JSON</button>
+        </div>
+        <table class="table" id="list">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Provider</th>
+              <th>URL</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="5" style="color:#94a3b8;">Loading surveys...</td></tr>
+          </tbody>
+        </table>
+      </div>
+ 
+      <!-- Right: preview -->
+      <div class="card">
+        <h2 style="margin:0 0 8px;font-size:16px;">Preview</h2>
+        <div id="previewMeta" class="flex" style="justify-content:space-between;margin-bottom:8px;">
+          <div id="currentTitle" class="pill">No selection</div>
+          <div class="flex" id="currentTags"></div>
+        </div>
+ 
+        <iframe id="frame" title="Survey preview"></iframe>
+ 
+        <div id="altEmbed" style="display:none; width:100%; min-height:520px;"></div>
+        <div class="flex" style="margin-top:10px;justify-content:space-between;">
+          <div id="embedStatus" class="status warn">Select a survey to preview.</div>
+          <div class="actions">
+            <button id="openBtn" class="btn">Open in new tab</button>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:8px;">
+          Note: Some providers still block embedding using <code>X-Frame-Options</code> or <code>Content-Security-Policy</code>. If the preview is blank, use "Open in new tab".
+        </div>
+      </div>
+    </div>
+  </div>
+ 
+  <script>
+    const $ = (id) => document.getElementById(id);
+   
+    // API base URL - this will work when deployed to Vercel
+    const API_BASE = '/api/surveys';
+   
+    const state = {
+      surveys: [],
+      selectedIndex: -1,
+    };
+ 
+    // ===== PROVIDER URL PATTERNS =====
+    const providerPatterns = {
+      microsoftform: {
+        pattern: /forms\.office\.com|forms\.microsoft\.com/i,
+        name: 'Microsoft Forms',
+        example: 'https://forms.office.com/...'
+      },
+      googleforms: {
+        pattern: /docs\.google\.com\/forms/i,
+        name: 'Google Forms',
+        example: 'https://docs.google.com/forms/...'
+      },
+      qualtrics: {
+        pattern: /qualtrics\.com/i,
+        name: 'Qualtrics',
+        example: 'https://xxx.qualtrics.com/...'
+      },
+      surveymonkey: {
+        pattern: /surveymonkey\.com/i,
+        name: 'SurveyMonkey',
+        example: 'https://www.surveymonkey.com/...'
+      },
+      typeform: {
+        pattern: /typeform\.com/i,
+        name: 'Typeform',
+        example: 'https://xxx.typeform.com/...'
+      }
+    };
+ 
+    // ===== URL VALIDATION =====
+    function validateProviderUrl(url, provider) {
+      // If no provider selected or "other", skip validation
+      if (!provider || provider === '' || provider === 'other') {
+        return { valid: true };
+      }
+ 
+      const providerInfo = providerPatterns[provider];
+      if (!providerInfo) {
+        return { valid: true };
+      }
+ 
+      if (!providerInfo.pattern.test(url)) {
+        return {
+          valid: false,
+          message: `The URL does not match ${providerInfo.name}. Please provide a valid ${providerInfo.name} URL (e.g., ${providerInfo.example})`
+        };
+      }
+ 
+      return { valid: true };
+    }
+ 
+    // ===== API FUNCTIONS =====
+    async function fetchSurveys() {
+      try {
+        const res = await fetch(API_BASE);
+        if (!res.ok) throw new Error('Failed to fetch surveys');
+        const data = await res.json();
+        state.surveys = data.surveys || [];
+        renderList();
+      } catch (err) {
+        console.error('Error fetching surveys:', err);
+        $('tbody').innerHTML = '<tr><td colspan="5" style="color:#f87171;">Error loading surveys. Please refresh.</td></tr>';
+      }
+    }
+ 
+    async function saveSurveyToAPI(survey, editId = null) {
+      try {
+        const res = await fetch(API_BASE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ survey, editId })
+        });
+        if (!res.ok) throw new Error('Failed to save survey');
+        const data = await res.json();
+        state.surveys = data.surveys || [];
+        renderList();
+        return true;
+      } catch (err) {
+        console.error('Error saving survey:', err);
+        return false;
+      }
+    }
+ 
+    async function deleteSurveyFromAPI(surveyId) {
+      try {
+        const res = await fetch(API_BASE, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ surveyId })
+        });
+        if (!res.ok) throw new Error('Failed to delete survey');
+        const data = await res.json();
+        state.surveys = data.surveys || [];
+        renderList();
+        return true;
+      } catch (err) {
+        console.error('Error deleting survey:', err);
+        return false;
+      }
+    }
+ 
+    // ===== HELPER FUNCTIONS =====
+    function uid(len=8){ return Math.random().toString(36).slice(2, 2+len); }
+ 
+    function detectProvider(u) {
+      const h = u.toLowerCase();
+      if (h.includes('forms.office.com')) return 'microsoftform';
+      if (h.includes('docs.google.com/forms')) return 'googleforms';
+      if (h.includes('qualtrics.com')) return 'qualtrics';
+      if (h.includes('surveymonkey.com')) return 'surveymonkey';
+      if (h.includes('typeform.com')) return 'typeform';
+      return 'other';
+    }
+ 
+    function normalizeUrl(raw, provider, opts) {
+      try {
+        const url = new URL(raw);
+        if (!provider || provider === 'other') provider = detectProvider(raw);
+ 
+        if (provider === 'googleforms') {
+          if (!url.searchParams.has('embedded')) url.searchParams.set('embedded','true');
+        } else if (provider === 'qualtrics') {
+          if (!url.searchParams.has('Q_CHL')) url.searchParams.set('Q_CHL','gl');
+        }
+ 
+        if (opts.appendParams) {
+          if (opts.Description) url.searchParams.set('Description', opts.Description);
+          if (opts.studyId) url.searchParams.set('studyId', opts.studyId);
+        }
+        return url.toString();
+      } catch (e) {
+        return raw;
+      }
+    }
+ 
+    function renderList() {
+      const tbody = $('tbody');
+      tbody.innerHTML = '';
+      if (state.surveys.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:#94a3b8;">No surveys yet.</td></tr>';
+        return;
+      }
+      state.surveys.forEach((s, i) => {
+        const tr = document.createElement('tr');
+        const providerLabel = s.provider || detectProvider(s.url);
+        const status = s.status || 'pending';
+        const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+        tr.innerHTML = `
+          <td>${escapeHtml(s.title || '(untitled)')}</td>
+          <td><span class="tag">${providerLabel}</span></td>
+          <td style="max-width:380px;word-break:break-all;color:#93c5fd;">${escapeHtml(s.url)}</td>
+          <td>
+            <span class="tag status-pill status-${status}">
+              ${statusLabel}
+            </span>
+          </td>
+          <td class="actions">
+            <button class="btn" data-act="preview" data-i="${i}" data-id="${s.studyId}">Preview</button>
+            <button class="btn" data-act="publish" data-i="${i}" data-id="${s.studyId}" ${status !== 'approved' ? 'disabled title="Waiting for admin approval"' : ''}>
+              Publish
+            </button>
+            <button class="btn" data-act="edit" data-i="${i}" data-id="${s.studyId}">Edit</button>
+            <button class="btn ghost" data-act="del" data-i="${i}" data-id="${s.studyId}">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+ 
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+ 
+    function clearForm() {
+      $('title').value = '';
+      $('url').value = '';
+      $('provider').value = '';
+      $('Description').value = '';
+      $('appendParams').checked = true;
+      $('tryEmbed').checked = true;
+      $('editIndex').value = '';
+      $('formMsg').textContent = '';
+    }
+ 
+    function setPreview(index) {
+      state.selectedIndex = index;
+      const s = state.surveys[index];
+      $('currentTitle').textContent = s.title || '(untitled)';
+ 
+      const tags = $('currentTags');
+      tags.innerHTML = '';
+      [s.provider || detectProvider(s.url), s.studyId ? `study:${s.studyId}` : '']
+        .filter(Boolean)
+        .forEach(t => {
+          const span = document.createElement('span');
+          span.className = 'tag';
+          span.textContent = t;
+          tags.appendChild(span);
+        });
+ 
+      const frame = $('frame');
+      frame.removeAttribute('src');
+      const embedOk = $('tryEmbed').checked;
+ 
+      if (embedOk) {
+        $('embedStatus').className = 'status warn';
+        $('embedStatus').textContent = 'Attempting to embed…';
+        frame.onload = () => {
+          $('embedStatus').className = 'status ok';
+          $('embedStatus').textContent = 'Embedded successfully. If blank, provider blocks framing—use "Open in new tab."';
+        };
+        frame.src = s.url;
+      } else {
+        $('embedStatus').className = 'status warn';
+        $('embedStatus').textContent = 'Embedding disabled. Use "Open in new tab."';
+      }
+ 
+      $('openBtn').onclick = () => window.open(s.url, '_blank', 'noopener');
+    }
+ 
+    // Table button actions
+    $('tbody').addEventListener('click', async (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const i = +btn.dataset.i;
+      const surveyId = btn.dataset.id;
+      const act = btn.dataset.act;
+ 
+      if (act === 'preview') setPreview(i);
+ 
+      if (act === 'publish') {
+        const s = state.surveys[i];
+        if ((s.status || 'pending') !== 'approved') {
+          alert('You cannot publish this survey until it has been approved by the admin.');
+          return;
+        }
+        alert('Survey published successfully (demo).');
+      }
+ 
+      if (act === 'edit') {
+        const s = state.surveys[i];
+        $('title').value = s.title || '';
+        $('url').value = s.rawUrl || s.url || '';
+        $('provider').value = s.provider || '';
+        $('Description').value = s.Description || '';
+        $('appendParams').checked = !!s.appendParams;
+        $('tryEmbed').checked = true;
+        $('editIndex').value = s.studyId;
+        $('formMsg').className = 'status';
+        $('formMsg').textContent = 'Editing existing survey…';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+ 
+      if (act === 'del') {
+        if (confirm('Delete this survey?')) {
+          const success = await deleteSurveyFromAPI(surveyId);
+          if (success) {
+            if (state.selectedIndex === i) {
+              $('frame').removeAttribute('src');
+              $('embedStatus').className = 'status warn';
+              $('embedStatus').textContent = 'Select a survey to preview.';
+              $('currentTitle').textContent = 'No selection';
+              $('currentTags').innerHTML = '';
+            }
+          } else {
+            alert('Failed to delete survey. Please try again.');
+          }
+        }
+      }
+    });
+ 
+    // Form submit
+    $('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = $('title').value.trim();
+      const rawUrl = $('url').value.trim();
+      const provider = $('provider').value.trim();
+      const Description = $('Description').value.trim();
+      const appendParams = $('appendParams').checked;
+ 
+      // Validate URL format
+      try { new URL(rawUrl); } catch {
+        $('formMsg').className = 'status err';
+        $('formMsg').textContent = 'Please enter a valid URL.';
+        return;
+      }
+ 
+      // Validate URL matches selected provider
+      const providerValidation = validateProviderUrl(rawUrl, provider);
+      if (!providerValidation.valid) {
+        $('formMsg').className = 'status err';
+        $('formMsg').textContent = providerValidation.message;
+        return;
+      }
+ 
+      const editId = $('editIndex').value || null;
+      let studyId, createdAt, status;
+ 
+      if (!editId) {
+        studyId = 'study_' + uid(6);
+        createdAt = Date.now();
+        status = 'pending';
+      } else {
+        const existing = state.surveys.find(s => s.studyId === editId);
+        studyId = editId;
+        createdAt = existing ? existing.createdAt : Date.now();
+        status = existing ? (existing.status || 'pending') : 'pending';
+      }
+ 
+      const finalUrl = normalizeUrl(rawUrl, provider, { appendParams, Description, studyId });
+ 
+      const record = {
+        title,
+        url: finalUrl,
+        rawUrl,
+        provider,
+        Description,
+        appendParams,
+        studyId,
+        createdAt,
+        status
+      };
+ 
+      $('formMsg').className = 'status';
+      $('formMsg').textContent = 'Saving...';
+ 
+      const success = await saveSurveyToAPI(record, editId);
+     
+      if (success) {
+        clearForm();
+        $('formMsg').className = 'status ok';
+        $('formMsg').textContent = 'Saved successfully.';
+        setTimeout(()=> $('formMsg').textContent = '', 2000);
+      } else {
+        $('formMsg').className = 'status err';
+        $('formMsg').textContent = 'Failed to save. Please try again.';
+      }
+    });
+ 
+    $('resetBtn').onclick = clearForm;
+ 
+    $('exportBtn').onclick = () => {
+      const txt = JSON.stringify(state.surveys, null, 2);
+      navigator.clipboard.writeText(txt).then(()=> alert('Copied surveys JSON to clipboard.'));
+    };
+ 
+    // Initial load - fetch surveys from API
+    fetchSurveys();
+  </script>
+</body>
+</html>

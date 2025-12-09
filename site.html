@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin • Survey Approvals with Log</title>
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>Admin • Survey Approvals</h1>
+      <a class="btn" href="Researcher.html">↩︎ Open Researcher Portal</a>
+    </div>
+ 
+    <div class="grid">
+      <!-- LEFT SIDE: Surveys list -->
+      <div class="card">
+        <div class="filters">
+          <button class="btn small" data-filter="pending">Pending <span class="count" id="c-pending">0</span></button>
+          <button class="btn small" data-filter="approved">Approved <span class="count" id="c-approved">0</span></button>
+          <button class="btn small" data-filter="rejected">Rejected <span class="count" id="c-rejected">0</span></button>
+          <button class="btn small ghost" id="refreshBtn">↻ Refresh</button>
+        </div>
+ 
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Provider</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="5" class="muted">No surveys found.</td></tr>
+          </tbody>
+        </table>
+      </div>
+ 
+      <!-- RIGHT SIDE: Preview -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <h3 id="pvTitle" style="margin:0;font-weight:600;">Preview</h3>
+          <button id="openNew" class="btn small">Open in new tab</button>
+        </div>
+        <iframe id="frame" title="Survey preview"
+          sandbox="allow-forms allow-scripts allow-popups allow-top-navigation-by-user-activation"></iframe>
+        <div id="pvStatus" class="status warn" style="margin-top:8px;">Select a survey to preview.</div>
+        <div class="muted" style="margin-top:6px;">
+          Note: Some providers block iframing via <code>X-Frame-Options</code> / <code>Content-Security-Policy</code>.
+          If the frame stays blank, use “Open in new tab”.
+        </div>
+      </div>
+    </div>
+ 
+    <!-- ADMIN ENTRY LOG -->
+    <div class="card" style="margin-top:20px;">
+      <h2 style="margin-top:0;">Admin Entry Log</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Action</th>
+            <th>Survey Title</th>
+            <th>Status</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
+        <tbody id="logBody">
+          <tr><td colspan="4" class="muted">No admin actions yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+ 
+  <script>
+    const $ = s => document.querySelector(s);
+    const tbody = $('#tbody');
+    const frame = $('#frame');
+    const logBody = $('#logBody');
+    let filter = 'pending';
+    let surveys = [];
+    let adminLog = JSON.parse(localStorage.getItem('adminLog') || '[]');
+ 
+    function loadSurveys() {
+      try { surveys = JSON.parse(localStorage.getItem('surveys') || '[]'); }
+      catch { surveys = []; }
+      let changed = false;
+      surveys.forEach(s => { if (!s.status) { s.status = 'pending'; changed = true; } });
+      if (changed) localStorage.setItem('surveys', JSON.stringify(surveys));
+    }
+ 
+    function fmtDate(ts){
+      if(!ts) return '-';
+      const d = new Date(ts);
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    }
+ 
+    function detectProvider(u=''){
+      const h = (u||'').toLowerCase();
+      if (h.includes('forms.office.com')) return 'microsoftform';
+      if (h.includes('docs.google.com/forms')) return 'googleforms';
+      if (h.includes('qualtrics.com')) return 'qualtrics';
+      if (h.includes('surveymonkey.com')) return 'surveymonkey';
+      if (h.includes('typeform.com')) return 'typeform';
+      return 'other';
+    }
+ 
+    function renderCounts(){
+      const counts = {pending:0, approved:0, rejected:0};
+      surveys.forEach(s => counts[s.status] = (counts[s.status]||0)+1);
+      $('#c-pending').textContent = counts.pending||0;
+      $('#c-approved').textContent = counts.approved||0;
+      $('#c-rejected').textContent = counts.rejected||0;
+    }
+ 
+    function renderList(){
+      tbody.innerHTML = '';
+      const list = surveys.filter(s => s.status === filter);
+      if (list.length === 0){
+        tbody.innerHTML = `<tr><td colspan="5" class="muted">No ${filter} surveys.</td></tr>`;
+        return;
+      }
+      list.forEach(s => {
+        const provider = s.provider || detectProvider(s.url);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(s.title || '(untitled)')}</td>
+          <td><span class="tag">${provider}</span></td>
+          <td><span class="tag" style="border-color:${statusColor(s.status)};color:${statusColor(s.status)}">${s.status}</span></td>
+          <td>${fmtDate(s.createdAt)}</td>
+          <td class="actions">
+            <button class="btn small" data-act="preview" data-id="${s.studyId}">Preview</button>
+            ${s.status!=='approved'?'<button class="btn small" data-act="approve" data-id="'+s.studyId+'">Approve</button>':''}
+            ${s.status!=='rejected'?'<button class="btn small" data-act="reject" data-id="'+s.studyId+'">Reject</button>':''}
+            <button class="btn small ghost" data-act="delete" data-id="${s.studyId}">Delete</button>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+    }
+ 
+    function renderLog() {
+      logBody.innerHTML = '';
+      if (adminLog.length === 0) {
+        logBody.innerHTML = '<tr><td colspan="4" class="muted">No admin actions yet.</td></tr>';
+        return;
+      }
+      adminLog.forEach(entry => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${entry.action}</td>
+          <td>${escapeHtml(entry.title || '(untitled)')}</td>
+          <td><span class="tag" style="border-color:${statusColor(entry.status)};color:${statusColor(entry.status)}">${entry.status}</span></td>
+          <td>${fmtDate(entry.time)}</td>`;
+        logBody.appendChild(tr);
+      });
+    }
+ 
+    function addToLog(action, survey) {
+      adminLog.unshift({
+        action,
+        title: survey.title,
+        status: survey.status,
+        time: Date.now()
+      });
+      localStorage.setItem('adminLog', JSON.stringify(adminLog));
+      renderLog();
+    }
+ 
+    function statusColor(st){
+      if (st==='approved') return '#22c55e';
+      if (st==='rejected') return '#ef4444';
+      return '#f59e0b';
+    }
+ 
+    function findById(id){ return surveys.find(s => s.studyId === id); }
+ 
+    function saveAll(){
+      localStorage.setItem('surveys', JSON.stringify(surveys));
+      renderCounts();
+      renderList();
+    }
+ 
+    function setPreview(s){
+      if (!s){
+        $('#pvTitle').textContent='Preview';
+        frame.removeAttribute('src');
+        $('#pvStatus').className='status warn';
+        $('#pvStatus').textContent='Select a survey to preview.';
+        return;
+      }
+      $('#pvTitle').textContent = `Preview: ${s.title || '(untitled)'}`;
+      $('#pvStatus').className = 'status warn';
+      $('#pvStatus').textContent = 'Loading…';
+      frame.onload = () => { $('#pvStatus').className='status ok'; $('#pvStatus').textContent='Embedded successfully (if blank, provider blocked framing).'; };
+      frame.src = s.url;
+      $('#openNew').onclick = () => window.open(s.url, '_blank', 'noopener');
+    }
+ 
+    function escapeHtml(str=''){
+      return String(str).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+ 
+    // Buttons and Events
+    document.querySelectorAll('[data-filter]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ filter = btn.dataset.filter; renderList(); });
+    });
+ 
+    $('#refreshBtn').addEventListener('click', ()=>{ loadSurveys(); renderCounts(); renderList(); renderLog(); });
+ 
+    tbody.addEventListener('click', e=>{
+      const b = e.target.closest('button'); if(!b) return;
+      const act = b.dataset.act, id = b.dataset.id;
+      const s = findById(id); if(!s) return;
+ 
+      if (act === 'preview') setPreview(s);
+      if (act === 'approve') { s.status='approved'; s.approvedAt=Date.now(); s.approvedBy='admin_demo'; saveAll(); addToLog('Approved', s); }
+      if (act === 'reject')  { s.status='rejected'; s.rejectedAt=Date.now(); s.rejectedBy='admin_demo'; saveAll(); addToLog('Rejected', s); }
+      if (act === 'delete')  {
+        if (confirm('Delete this survey from the queue?')) {
+          const i = surveys.findIndex(x=>x.studyId===id);
+          if (i>-1) { surveys.splice(i,1); saveAll(); setPreview(null); addToLog('Deleted', s); }
+        }
+      }
+    });
+ 
+    // Initialize
+    loadSurveys();
+    renderCounts();
+    renderList();
+    renderLog();
+    setPreview(null);
+  </script>
+</body>
+</html>

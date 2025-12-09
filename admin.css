@@ -1,0 +1,137 @@
+:root {
+    --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#38bdf8;
+    --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --br:14px;
+  }
+   
+  * {
+    box-sizing: border-box;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto, Arial;
+  }
+   
+  body {
+    margin: 0;
+    background: linear-gradient(180deg, #0b1220, #0f172a);
+    color: var(--text);
+  }
+   
+  .wrap {
+    max-width: 1200px;
+    margin: 32px auto;
+    padding: 0 16px;
+  }
+   
+  h1 {
+    margin: 0 0 12px;
+    color: #fff;
+  }
+   
+  .topbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+   
+  .btn {
+    cursor: pointer;
+    border: 1px solid #263345;
+    background: #0b1220;
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 10px;
+  }
+   
+  .btn.primary {
+    background: linear-gradient(90deg, #0ea5e9, #22d3ee);
+    color: #05222b;
+    border: none;
+  }
+   
+  .btn.ghost {
+    background: transparent;
+  }
+   
+  .btn.small {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+   
+  .grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 16px;
+  }
+   
+  .card {
+    background: var(--panel);
+    border: 1px solid #1f2937;
+    border-radius: var(--br);
+    padding: 14px;
+  }
+   
+  .filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+   
+  .count {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: 6px;
+  }
+   
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+   
+  th, td {
+    padding: 10px;
+    border-bottom: 1px solid #1f2937;
+    vertical-align: middle;
+  }
+   
+  th {
+    text-align: left;
+    color: var(--accent);
+    font-size: 13px;
+  }
+   
+  .tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border: 1px solid #334155;
+    border-radius: 999px;
+    color: #cbd5e1;
+  }
+   
+  .status {
+    font-size: 12px;
+  }
+   
+  .status.ok { color: var(--ok); }
+  .status.warn { color: var(--warn); }
+  .status.err { color: var(--err); }
+   
+  .actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+   
+  iframe {
+    width: 100%;
+    height: 520px;
+    border: 1px solid #243042;
+    border-radius: 12px;
+    background: #0b1220;
+  }
+   
+  .muted {
+    color: var(--muted);
+    font-size: 12px;
+  }
+   
